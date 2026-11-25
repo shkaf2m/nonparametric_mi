@@ -18,12 +18,16 @@ def draw_graphs(results_path):
     axes[0].plot(sample_grid, true_mi, label="true MI", color="black", linestyle="--")
 
     for name in estimators:
-        axes[0].plot(mean_hat_mi[name].index.to_numpy(), mean_hat_mi[name].values, label=name, linewidth=5)
-        axes[1].plot(mean_hat_mi[name].index.to_numpy(), mean_hat_mi[name].values, label=name, linewidth=5)
+        axes[0].plot(mean_hat_mi[name].index.to_numpy(), mean_hat_mi[name].values, label=name, linewidth=3)
+        axes[1].plot(var.index, var[name], label=name, linewidth=3)
         axes[0].grid(True, alpha=0.3)
         axes[0].legend()
         axes[1].grid(True, alpha=0.3)
         axes[1].legend()
+        
+        axes[0].set_title("Значение оценки MI")
+        axes[1].set_title("Дисперсия оценки")
+        axes[0].set_xlabel("Размер выборки")
 
     plt.suptitle(f"Бенчмарк: {Path(results_path).name.split("_results.csv")[0]}")
     plt.show()

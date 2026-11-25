@@ -77,41 +77,12 @@ def generate_uniform_sample(
     rng = np.random.default_rng(seed=seed)
     # xi, eta ~ N((I, Sigma, Sigma^T, I))
     # X = F(xi), Y = F(eta) (по компонентно)
-    if depends_dim_count > dim_count:
-        raise ValueError("Error: depends_dim_count > dim_count")
-    if depends_dim_count > 0 and mi == 0:
-        raise ValueError("Error: mi == 0, but depends_dim_count > 0")
-    if mi != 0 and depends_dim_count == 0:
-        raise ValueError("Error: mi != 0, but depends_dim_count == 0")
 
-    sample_benchmark = []
-
-    if mi != 0:
-        rho = np.sqrt(-np.expm1(-2 * mi / depends_dim_count))
-    else:
-        rho = 0
-    
-    # делаем cov(X, Y) = diag(pho, pho, 0, 0, 0, ...)
-
-    sigma_xy = np.zeros((dim_count, dim_count))
-    if depends_dim_count > 0:
-        sigma_xy[np.arange(depends_dim_count), np.arange(depends_dim_count)] = rho
-    
-    cov = np.block([
-        [np.eye(dim_count), sigma_xy],
-        [sigma_xy.T, np.eye(dim_count)]
-    ])
-    samples = rng.multivariate_normal(
-        mean=np.zeros(dim_count + dim_count),
-        cov=cov,
-        size=sample_size
-    )
-    norm_X = samples[:, :dim_x]
-    norm_Y = samples[:, dim_x:]
-
+    gaussian_dict = generate_normal_sample(mi, sample_size, dim_count, depends_dim_count, seed)
+    gaussian_X, gaussian_Y = gaussian_dict["X"], gaussian_dict["Y"]
     # переходим к uniform
-    uniform_X = sps.norm(loc=0, scale=1).cdf(norm_X)
-    uniform_Y = sps.norm(loc=0, scale=1).cdf(norm_Y)
+    uniform_X = sps.norm(loc=0, scale=1).cdf(gaussian_X)
+    uniform_Y = sps.norm(loc=0, scale=1).cdf(gaussian_Y)
     
     return {
         "X": uniform_X,
@@ -169,7 +140,7 @@ def generate_loggammaexpon_sample(
 def generate_normal_benchmark_0(out_dir):
     mi = 0
     depends_dim_count = 0
-    dim_count = 10
+    dim_count = 5
     samples_count = 100
     benchmark = dict()
     for sample_size in SAMPLE_SIZE_GRID:
@@ -179,13 +150,13 @@ def generate_normal_benchmark_0(out_dir):
             samples.append(generate_normal_sample(mi, sample_size, dim_count, depends_dim_count, start_seed + i))
         benchmark[sample_size] = samples
 
-    with open(Path(out_dir) / f"normal_{dim_count}_{depends_dim_count}.pkl", "wb") as f:
+    with open(Path(out_dir) / f"normal_{dim_count}_{depends_dim_count}_{mi}.pkl", "wb") as f:
         pickle.dump(benchmark, f)
 
 def generate_normal_benchmark_1(out_dir):
-    mi = 4
-    depends_dim_count = 5
-    dim_count = 15
+    mi = 2
+    depends_dim_count = 2
+    dim_count = 7
     samples_count = 100
     benchmark = dict()
     for sample_size in SAMPLE_SIZE_GRID:
@@ -195,7 +166,23 @@ def generate_normal_benchmark_1(out_dir):
             samples.append(generate_normal_sample(mi, sample_size, dim_count, depends_dim_count, start_seed + i))
         benchmark[sample_size] = samples
 
-    with open(Path(out_dir) / f"normal_{dim_count}_{depends_dim_count}.pkl", "wb") as f:
+    with open(Path(out_dir) / f"normal_{dim_count}_{depends_dim_count}_{mi}.pkl", "wb") as f:
+        pickle.dump(benchmark, f)
+
+def generate_uniform_benchmark_0(out_dir):
+    mi = 2
+    depends_dim_count = 2
+    dim_count = 9
+    samples_count = 100
+    benchmark = dict()
+    for sample_size in SAMPLE_SIZE_GRID:
+        samples = []
+        for i in range(samples_count):
+            start_seed = 42
+            samples.append(generate_uniform_sample(mi, sample_size, dim_count, depends_dim_count, start_seed + i))
+        benchmark[sample_size] = samples
+
+    with open(Path(out_dir) / f"uniform_{dim_count}_{depends_dim_count}_{mi}.pkl", "wb") as f:
         pickle.dump(benchmark, f)
 
 def generate_loggammaexpon_benchmark_0(out_dir):
@@ -206,7 +193,7 @@ def generate_loggammaexpon_benchmark_0(out_dir):
         samples = []
         for i in range(samples_count):
             start_seed = 42
-            samples.append(generate_loggammaexpon_sample(theta, start_seed + i))
+            samples.append(generate_loggammaexpon_sample(theta=theta, sample_size=sample_size, seed=start_seed + i))
         benchmark[sample_size] = samples
 
     with open(Path(out_dir) / f"loggammaexpon_{theta}.pkl", "wb") as f:
@@ -219,8 +206,10 @@ if __name__ == "__main__":
 
     generate_functions = [
         generate_normal_benchmark_0, generate_normal_benchmark_1,
+        generate_uniform_benchmark_0,
         generate_loggammaexpon_benchmark_0
     ]
+    os.makedirs(args.out, exist_ok=True)
     for func in generate_functions:
         func(args.out)
     print(f"Сохранено в {args.out}/")

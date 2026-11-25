@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 from mutinfo.estimators.knn import KSG, WKL
 from sklearn.cross_decomposition import CCA
+import scipy.stats as sps
 import pickle
 import tqdm
 import numpy as np
@@ -11,8 +12,11 @@ import argparse
 import os
 import warnings
 warnings.filterwarnings("ignore")
+from functools import partial
 
-def estimate_cca_normal(X, Y, n_components=3):
+import numpy as numpy
+
+def estimate_cca_normal(X, Y, n_components=4):
     cca = CCA(
         n_components=min(
             n_components,
@@ -33,6 +37,32 @@ def estimate_cca_normal(X, Y, n_components=3):
 
     return -0.5 * np.log1p(-rho_squared).sum()
 
+def estimate_cca_uniform(X, Y, n_components=3):
+    cca = CCA(
+        n_components=min(
+            n_components,
+            X.shape[1],
+            Y.shape[1],
+            X.shape[0] - 1
+        )
+    )
+
+    # uniform to gaussian
+
+    gaussian_X = sps.norm(0, 1).ppf(X)
+    gaussian_Y = sps.norm(0, 1).ppf(Y)
+
+    X_c, Y_c = cca.fit_transform(gaussian_X, gaussian_Y)
+
+    rho = np.array([
+        np.corrcoef(X_c[:, i], Y_c[:, i])[0, 1]
+        for i in range(cca.n_components)
+    ])
+
+    rho_squared = np.clip(rho ** 2, 0, 1 - 1e-10)
+
+    return -0.5 * np.log1p(-rho_squared).sum()
+
 def run_on_benchmark(benchmark_path, out_dir):
     with open(benchmark_path, "rb") as f:
         benchmark = pickle.load(f)
@@ -41,7 +71,7 @@ def run_on_benchmark(benchmark_path, out_dir):
     estimators = {
         "CCA": estimate_cca_normal,
         "KSG": KSG(k_neighbors=5),
-        "WKL": WKL(k_neighbors=5),
+        "WKL": WKL(k_neighbors=10),
     }
     results = []
     for sample_size, samples in benchmark.items():
@@ -50,7 +80,10 @@ def run_on_benchmark(benchmark_path, out_dir):
             true_mi = elem["MI"]
 
             for name, estimator in estimators.items():
-                hat_mi = float(estimator(X, Y))
+                if name == "CCA" and Path(benchmark_path).stem.startswith("uniform"):
+                    hat_mi = float(estimate_cca_uniform(X, Y))
+                else:
+                    hat_mi = float(estimator(X, Y))
 
                 results.append({
                     "estimator": name,
